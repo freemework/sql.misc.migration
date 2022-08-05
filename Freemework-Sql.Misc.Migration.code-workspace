@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": "docs"
+		},
+		{
+			"path": "src-csharp"
+		},
+		{
+			"path": "src-dart"
+		},
+		{
+			"path": "src-python"
+		},
+		{
+			"path": "src-typescript"
+		},
+		{
+			"name": "workspace",
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.autoSave": "afterDelay",
+		"files.autoSaveDelay": 3000
+	}
+}
+
+
