@@ -1,0 +1,38 @@
+name: NodeJS Package
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml  # use the callable tests job to run tests
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set Up NodeJS
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@freemework'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+
+      - name: Build Package
+        run: |
+          npm run build:package
+
+      - name: Publish Package
+        run: |
+          cd .dist
+          npm publish --access=public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

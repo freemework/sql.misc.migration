@@ -1,0 +1,36 @@
+{
+	"editor.detectIndentation": false,
+	"editor.insertSpaces": false,
+	"editor.lineNumbers": "on",
+	"editor.renderWhitespace": "all",
+	"editor.rulers": [
+		80,
+		160,
+		240,
+		320
+	],
+	"editor.trimAutoWhitespace": true,
+	"editor.useTabStops": true,
+	"editor.wordWrapColumn": 1024,
+	"files.autoSave": "afterDelay",
+	"files.autoSaveDelay": 5000,
+	"files.insertFinalNewline": true,
+	"files.encoding": "utf8",
+	"files.eol": "\n",
+	"files.exclude": {
+		".dist": true,
+		".nyc_output": true,
+		".package": true,
+		"coverage": true,
+		"node_modules": true,
+		"src/**/*.d.ts": true,
+		"src/**/*.js": true,
+		"src/**/*.map": true,
+		"test/**/*.d.ts":true,
+		"test/**/*.js":true,
+		"test/**/*.map":true
+	},
+	"git.enabled": true,
+	"git.rebaseWhenSync": true,
+	"editor.guides.indentation": true
+}

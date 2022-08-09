@@ -1,0 +1,59 @@
+{
+	"name": "@freemework/sql.misc.migration",
+	"version": "0.4.0",
+	"description": "Hosting library of the Freemework Project.",
+	"author": {
+		"name": "Freemework Project",
+		"email": "dev@freemework.org",
+		"url": "https://docs.freemework.org"
+	},
+	"contributors": [
+		{
+			"name": "Maxim Anurin",
+			"email": "maxim.anurin@freemework.org",
+			"url": "https://www.anurin.name"
+		}
+	],
+	"license": "Apache-2.0",
+	"keywords": [
+		"freemework",
+		"free",
+		"me",
+		"work"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/freemework/hosting.git"
+	},
+	"bugs": {
+		"url": "https://github.com/freemework/hosting/issues"
+	},
+	"engines": {
+		"node": ">=12.0.0 <19"
+	},
+	"homepage": "https://docs.freemework.org/#common?lang=typescript",
+	"main": "src/index.js",
+	"types": "src/index.d.ts",
+	"scripts": {
+		"clean": "find src \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -exec rm {} \\; ; find test \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -exec rm {} \\;",
+		"build": "tsc",
+		"build:package": "rm -rf lib && tsc --project tsconfig-package.json && cp README.md .dist/ && jq '{ name: .name, version: .version, description: .description, author: .author, contributors: .contributors, license: .license, keywords: .keywords, repository: .repository, bugs: .bugs, engines: .engines, homepage: .homepage, main: \"lib/index.js\", types: \"lib/index.d.ts\" }' package.json > .dist/package.json",
+		"test": "tsc && nyc --exclude submodules --exclude test --extension=\".ts\" --reporter=lcov --reporter=text --reporter=text-summary mocha \"test/**/*.test.js\" --recursive --timeout 10000",
+		"test:only": "tsc && mocha --require source-map-support/register \"test/**/*.test.js\" --recursive --timeout 10000"
+	},
+	"dependencies": {
+		"@freemework/common": "^0.4.7",
+		"@types/node": "^18.0.0"
+	},
+	"devDependencies": {
+		"@types/chai": "^4.3.1",
+		"@types/mocha": "^9.1.1",
+		"@types/mustache": "^4.2.1",
+		"chai": "^4.3.6",
+		"mocha": "^10.0.0",
+		"mustache": "^4.2.0",
+		"nyc": "^15.1.0",
+		"source-map-support": "^0.5.21",
+		"typescript": "^4.7.4"
+	}
+}

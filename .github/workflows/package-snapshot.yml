@@ -1,0 +1,46 @@
+name: NodeJS Snapshot Package
+
+on:
+  push:
+    branches:
+      - '*'
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml  # use the callable tests job to run tests
+
+  build:
+    runs-on: ubuntu-latest
+    permissions: 
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set Up NodeJS
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16.x"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "${{ github.repository.owner }}"
+
+      - name: Install Dependencies
+        run: |
+          npm install
+
+      - name: Build Package
+        run: |
+          npm run build:package
+
+      - name: Publish Package
+        run: |
+          cd .dist
+          mv package.json package.json-bak
+          VERSION=$(jq -r '.version' package.json-bak)
+          SHORT_GITHUB_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
+          jq ".version=\"${VERSION}-snapshot.${SHORT_GITHUB_SHA}\"" package.json-bak > package.json
+          rm package.json-bak
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
