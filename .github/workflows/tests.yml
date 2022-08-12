@@ -19,6 +19,10 @@ jobs:
         with:
           node-version: "${{ matrix.node-version }}"
 
+      - name: Bump NPM to latest version
+        run: |
+          npm -g install npm
+
       - name: Install Dependencies
         run: |
           npm install

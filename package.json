@@ -1,6 +1,6 @@
 {
 	"name": "@freemework/sql.misc.migration",
-	"version": "0.4.0",
+	"version": "0.4.19",
 	"description": "Hosting library of the Freemework Project.",
 	"author": {
 		"name": "Freemework Project",
@@ -37,12 +37,12 @@
 	"scripts": {
 		"clean": "find src \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -exec rm {} \\; ; find test \\( -name '*.js' -o -name '*.d.ts' -o -name '*.map' \\) -exec rm {} \\;",
 		"build": "tsc",
-		"build:package": "rm -rf lib && tsc --project tsconfig-package.json && cp README.md .dist/ && jq '{ name: .name, version: .version, description: .description, author: .author, contributors: .contributors, license: .license, keywords: .keywords, repository: .repository, bugs: .bugs, engines: .engines, homepage: .homepage, main: \"lib/index.js\", types: \"lib/index.d.ts\" }' package.json > .dist/package.json",
-		"test": "tsc && nyc --exclude submodules --exclude test --extension=\".ts\" --reporter=lcov --reporter=text --reporter=text-summary mocha \"test/**/*.test.js\" --recursive --timeout 10000",
+		"build:package": "rm -rf lib && tsc --project tsconfig-package.json && cp README.md .dist/ && jq '{ name: .name, version: .version, description: .description, author: .author, contributors: .contributors, license: .license, keywords: .keywords, repository: .repository, bugs: .bugs, engines: .engines, homepage: .homepage, main: \"lib/index.js\", types: \"lib/index.d.ts\", dependencies: .dependencies }' package.json > .dist/package.json",
+		"test": "tsc && nyc --exclude submodules --exclude test --extension=\".ts\" --reporter=lcov --reporter=text --reporter=text-summary mocha --require source-map-support/register --recursive --timeout 10000 \"test/**/*.test.js\"",
 		"test:only": "tsc && mocha --require source-map-support/register \"test/**/*.test.js\" --recursive --timeout 10000"
 	},
 	"dependencies": {
-		"@freemework/common": "^0.4.7",
+		"@freemework/common": "^0.4.19",
 		"@types/node": "^18.0.0"
 	},
 	"devDependencies": {

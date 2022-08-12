@@ -6,7 +6,7 @@
 		"cwd": "${workspaceRoot}",
 		"env": {
 			"NODE_ENV": "development",
-			"BUILD_TARGET": "devel"
+			"BUILD_TARGET": "local"
 		}
 	},
 	"tasks": [
