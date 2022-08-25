@@ -7,7 +7,8 @@ import {
 	FLogger,
 	FSqlProvider,
 	FSqlProviderFactory,
-	FException
+	FException,
+	FExecutionContextLogger
 } from "@freemework/common";
 
 import { FMigrationSources } from "./FMigrationSources";
@@ -15,14 +16,12 @@ import { FMigrationSources } from "./FMigrationSources";
 export abstract class FMigrationManager {
 	private readonly _sqlProviderFactory: FSqlProviderFactory;
 	private readonly _migrationSources: FMigrationSources;
-	private readonly _log: FLogger;
 	private readonly _versionTableName: string;
 
 
 	public constructor(opts: FMigrationManager.Opts) {
 		this._migrationSources = opts.migrationSources;
 		this._sqlProviderFactory = opts.sqlProviderFactory;
-		this._log = opts.log;
 		this._versionTableName = opts.versionTableName !== undefined ? opts.versionTableName : "__migration";
 	}
 
@@ -32,6 +31,7 @@ export abstract class FMigrationManager {
 	 * @param targetVersion Optional target version. Will use latest version if omited.
 	 */
 	public async install(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
+		const logger: FLogger = FExecutionContextLogger.of(executionContext).logger;
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
 		const availableVersions: Array<string> = [...this._migrationSources.versionNames].sort(); // from old version to new version
 		let scheduleVersions: Array<string> = availableVersions;
@@ -57,7 +57,7 @@ export abstract class FMigrationManager {
 
 		for (const versionName of scheduleVersions) {
 			await this.sqlProviderFactory.usingProviderWithTransaction(executionContext, async (sqlProvider: FSqlProvider) => {
-				const migrationLogger = new FMigrationManager.MigrationLogger(this._log.getLogger(versionName));
+				const migrationLogger = new FMigrationManager.MigrationLogger(logger.getLogger(versionName));
 
 				const versionBundle: FMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
 				const installScriptNames: Array<string> = [...versionBundle.installScriptNames].sort();
@@ -99,6 +99,7 @@ export abstract class FMigrationManager {
 	 * @param targetVersion Optional target version. Will use latest version if omited.
 	 */
 	public async rollback(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
+		const logger: FLogger = FExecutionContextLogger.of(executionContext).logger;
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
 		const availableVersions: Array<string> = [...this._migrationSources.versionNames].sort().reverse(); // from new version to old version
 		let scheduleVersionNames: Array<string> = availableVersions;
@@ -120,14 +121,14 @@ export abstract class FMigrationManager {
 		for (const versionName of scheduleVersionNames) {
 			await this.sqlProviderFactory.usingProviderWithTransaction(executionContext, async (sqlProvider: FSqlProvider) => {
 				if (! await this._isVersionLogExist(executionContext, sqlProvider, versionName)) {
-					this._log.warn(`Skip rollback for version '${versionName}' due this does not present inside database.`);
+					logger.warn(`Skip rollback for version '${versionName}' due this does not present inside database.`);
 					return;
 				}
 
 				const versionBundle: FMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
 				const rollbackScriptNames: Array<string> = [...versionBundle.rollbackScriptNames].sort();
 				for (const scriptName of rollbackScriptNames) {
-					const migrationLogger = this._log.getLogger(versionName);
+					const migrationLogger = logger.getLogger(versionName);
 
 					const script: FMigrationSources.Script = versionBundle.getRollbackScript(scriptName);
 					switch (script.kind) {
@@ -166,8 +167,6 @@ export abstract class FMigrationManager {
 	public abstract getCurrentVersion(executionContext: FExecutionContext): Promise<string | null>;
 
 	protected get sqlProviderFactory(): FSqlProviderFactory { return this._sqlProviderFactory; }
-
-	protected get log(): FLogger { return this._log; }
 
 	protected get versionTableName(): string { return this._versionTableName; }
 
@@ -236,8 +235,6 @@ export namespace FMigrationManager {
 		readonly migrationSources: FMigrationSources;
 
 		readonly sqlProviderFactory: FSqlProviderFactory;
-
-		readonly log: FLogger;
 
 		/**
 		 * Name of version table. Default `__migration`.
