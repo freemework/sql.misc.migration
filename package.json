@@ -1,6 +1,6 @@
 {
 	"name": "@freemework/sql.misc.migration",
-	"version": "0.7.0",
+	"version": "0.7.1",
 	"description": "Hosting library of the Freemework Project.",
 	"author": {
 		"name": "Freemework Project",
