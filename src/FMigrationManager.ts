@@ -4,11 +4,11 @@ import * as vm from "vm";
 
 import {
 	FExecutionContext,
-	FLogger,
+	FLoggerLegacy,
 	FSqlProvider,
 	FSqlProviderFactory,
 	FException,
-	FExecutionContextLogger
+	FExecutionContextLoggerLegacy
 } from "@freemework/common";
 
 import { FMigrationSources } from "./FMigrationSources";
@@ -28,10 +28,10 @@ export abstract class FMigrationManager {
 	/**
 	 * Install versions (increment version)
 	 * @param executionContext
-	 * @param targetVersion Optional target version. Will use latest version if omited.
+	 * @param targetVersion Optional target version. Will use latest version if omitted.
 	 */
 	public async install(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
-		const logger: FLogger = FExecutionContextLogger.of(executionContext).logger;
+		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(executionContext).logger;
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
 		const availableVersions: Array<string> = [...this._migrationSources.versionNames].sort(); // from old version to new version
 		let scheduleVersions: Array<string> = availableVersions;
@@ -96,10 +96,10 @@ export abstract class FMigrationManager {
 	/**
 	 * Rollback versions (increment version)
 	 * @param cancellationToken A cancellation token that can be used to cancel the action.
-	 * @param targetVersion Optional target version. Will use latest version if omited.
+	 * @param targetVersion Optional target version. Will use first version if omitted.
 	 */
 	public async rollback(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
-		const logger: FLogger = FExecutionContextLogger.of(executionContext).logger;
+		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(executionContext).logger;
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
 		const availableVersions: Array<string> = [...this._migrationSources.versionNames].sort().reverse(); // from new version to old version
 		let scheduleVersionNames: Array<string> = availableVersions;
@@ -177,7 +177,7 @@ export abstract class FMigrationManager {
 	protected async _executeMigrationJavaScript(
 		executionContext: FExecutionContext,
 		sqlProvider: FSqlProvider,
-		migrationLogger: FLogger,
+		migrationLogger: FLoggerLegacy,
 		migrationJavaScript: {
 			readonly content: string;
 			readonly file: string;
@@ -202,7 +202,7 @@ migration(__private.cancellationToken, __private.sqlProvider, __private.log).the
 	protected async _executeMigrationSql(
 		executionContext: FExecutionContext,
 		sqlProvider: FSqlProvider,
-		migrationLogger: FLogger,
+		migrationLogger: FLoggerLegacy,
 		sqlText: string
 	): Promise<void> {
 		migrationLogger.trace(EOL + sqlText);
@@ -245,7 +245,7 @@ export namespace FMigrationManager {
 	export class MigrationException extends FException { }
 	export class WrongMigrationDataException extends MigrationException { }
 
-	export class MigrationLogger implements FLogger {
+	export class MigrationLogger implements FLoggerLegacy {
 		public readonly isTraceEnabled: boolean;
 		public readonly isDebugEnabled: boolean;
 		public readonly isInfoEnabled: boolean;
@@ -253,10 +253,10 @@ export namespace FMigrationManager {
 		public readonly isErrorEnabled: boolean;
 		public readonly isFatalEnabled: boolean;
 
-		private readonly _wrap: FLogger;
+		private readonly _wrap: FLoggerLegacy;
 		private readonly _lines: Array<string>;
 
-		public constructor(wrap: FLogger) {
+		public constructor(wrap: FLoggerLegacy) {
 			this.isTraceEnabled = true;
 			this.isDebugEnabled = true;
 			this.isInfoEnabled = true;
@@ -268,7 +268,7 @@ export namespace FMigrationManager {
 			this._wrap = wrap;
 		}
 
-		public get context(): FLogger.Context {
+		public get context(): FLoggerLegacy.Context {
 			return this._wrap.context;
 		}
 
@@ -302,10 +302,10 @@ export namespace FMigrationManager {
 			this._lines.push("[FATAL]" + message);
 		}
 
-		public getLogger(name: string): FLogger;
-		public getLogger(name: string, context: FLogger.Context): FLogger;
-		public getLogger(context: FLogger.Context): FLogger;
-		public getLogger(name: unknown, context?: unknown): FLogger {
+		public getLogger(name: string): FLoggerLegacy;
+		public getLogger(name: string, context: FLoggerLegacy.Context): FLoggerLegacy;
+		public getLogger(context: FLoggerLegacy.Context): FLoggerLegacy;
+		public getLogger(name: unknown, context?: unknown): FLoggerLegacy {
 			return this;
 		}
 	}
