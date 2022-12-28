@@ -5,30 +5,15 @@ import * as fs from "fs";
 import * as path from "path";
 import { pathToFileURL } from "url";
 
-import { FMigrationSources } from "../src";
-import { FCancellationExecutionContext, FExecutionContext } from "@freemework/common";
+import { FSqlMigrationSources } from "../src";
+import { FExecutionContext } from "@freemework/common";
 
-interface A {
-}
-namespace A {
-	export const Dummy = null;
-	export function factory(): A {
-		return new B();
-	}
-}
-class B implements A {
-	public constructor() {}
-}
-
-const a: A = A.factory();
-
-
-describe("FMigrationSources tests", function () {
+describe("FSqlMigrationSources tests", function () {
 
 	it("load() from disk", async function () {
-		const resourcesDir: string = path.join(__dirname, "../test.files/FMigrationSources");
+		const resourcesDir: string = path.join(__dirname, "../test.files/FSqlMigrationSources");
 
-		const migrationSources: FMigrationSources = await FMigrationSources
+		const migrationSources: FSqlMigrationSources = await FSqlMigrationSources
 			.load(
 				FExecutionContext.Default,
 				pathToFileURL(resourcesDir)

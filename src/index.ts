@@ -1,2 +1,2 @@
-export { FMigrationManager } from "./FMigrationManager";
-export { FMigrationSources } from "./FMigrationSources";
+export { FSqlMigrationManager } from "./FSqlMigrationManager";
+export { FSqlMigrationSources } from "./FSqlMigrationSources";

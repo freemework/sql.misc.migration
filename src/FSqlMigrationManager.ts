@@ -11,15 +11,15 @@ import {
 	FLoggerLabels,
 } from "@freemework/common";
 
-import { FMigrationSources } from "./FMigrationSources";
+import { FSqlMigrationSources } from "./FSqlMigrationSources";
 
-export abstract class FMigrationManager {
+export abstract class FSqlMigrationManager {
 	private readonly _sqlConnectionFactory: FSqlConnectionFactory;
-	private readonly _migrationSources: FMigrationSources;
+	private readonly _migrationSources: FSqlMigrationSources;
 	private readonly _versionTableName: string;
 
 
-	public constructor(opts: FMigrationManager.Opts) {
+	public constructor(opts: FSqlMigrationManager.Opts) {
 		this._migrationSources = opts.migrationSources;
 		this._sqlConnectionFactory = opts.sqlConnectionFactory;
 		this._versionTableName = opts.versionTableName !== undefined ? opts.versionTableName : "__migration";
@@ -57,20 +57,20 @@ export abstract class FMigrationManager {
 
 		for (const versionName of scheduleVersions) {
 			await this.sqlConnectionFactory.usingProviderWithTransaction(executionContext, async (sqlConnection: FSqlConnection) => {
-				const migrationLogger = new FMigrationManager.MigrationLogger(FLogger.create(`${logger.name}.${versionName}`));
+				const migrationLogger = new FSqlMigrationManager.MigrationLogger(FLogger.create(`${logger.name}.${versionName}`));
 
-				const versionBundle: FMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
+				const versionBundle: FSqlMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
 				const installScriptNames: Array<string> = [...versionBundle.installScriptNames].sort();
 				for (const scriptName of installScriptNames) {
-					const script: FMigrationSources.Script = versionBundle.getInstallScript(scriptName);
+					const script: FSqlMigrationSources.Script = versionBundle.getInstallScript(scriptName);
 					switch (script.kind) {
-						case FMigrationSources.Script.Kind.SQL: {
+						case FSqlMigrationSources.Script.Kind.SQL: {
 							migrationLogger.info(executionContext, `Execute SQL script: ${script.name}`);
 							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationSql(executionContext, sqlConnection, migrationLogger, script.content);
 							break;
 						}
-						case FMigrationSources.Script.Kind.JAVASCRIPT: {
+						case FSqlMigrationSources.Script.Kind.JAVASCRIPT: {
 							migrationLogger.info(executionContext, `Execute JS script: ${script.name}`);
 							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationJavaScript(
@@ -125,20 +125,20 @@ export abstract class FMigrationManager {
 					return;
 				}
 
-				const versionBundle: FMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
+				const versionBundle: FSqlMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
 				const rollbackScriptNames: Array<string> = [...versionBundle.rollbackScriptNames].sort();
 				for (const scriptName of rollbackScriptNames) {
 					const migrationLogger: FLogger = FLogger.create(`${logger.name}.${versionName}`);
 
-					const script: FMigrationSources.Script = versionBundle.getRollbackScript(scriptName);
+					const script: FSqlMigrationSources.Script = versionBundle.getRollbackScript(scriptName);
 					switch (script.kind) {
-						case FMigrationSources.Script.Kind.SQL: {
+						case FSqlMigrationSources.Script.Kind.SQL: {
 							migrationLogger.info(executionContext, `Execute SQL script: ${script.name}`);
 							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationSql(executionContext, sqlConnection, migrationLogger, script.content);
 							break;
 						}
-						case FMigrationSources.Script.Kind.JAVASCRIPT: {
+						case FSqlMigrationSources.Script.Kind.JAVASCRIPT: {
 							migrationLogger.info(executionContext, `Execute JS script: ${script.name}`);
 							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationJavaScript(
@@ -230,9 +230,9 @@ Promise.resolve().then(() => migration(__private.executionContext, __private.sql
 	): Promise<void>;
 }
 
-export namespace FMigrationManager {
+export namespace FSqlMigrationManager {
 	export interface Opts {
-		readonly migrationSources: FMigrationSources;
+		readonly migrationSources: FSqlMigrationSources;
 
 		readonly sqlConnectionFactory: FSqlConnectionFactory;
 

@@ -17,9 +17,9 @@ const readdirAsync = promisify(fs.readdir);
 const readFileAsync = promisify(fs.readFile);
 const writeFileAsync = promisify(fs.writeFile);
 
-export class FMigrationSources {
+export class FSqlMigrationSources {
 	public readonly versionNames: ReadonlyArray<string>;
-	private readonly _versions: Map<string, FMigrationSources.VersionBundle>;
+	private readonly _versions: Map<string, FSqlMigrationSources.VersionBundle>;
 
 	/**
 	 * Load data into memory and represent it as FMigrationSources
@@ -29,11 +29,11 @@ export class FMigrationSources {
 	public static load(executionContext: FExecutionContext, sourceUri: URL, opts?: {
 		readonly versionFrom?: string;
 		readonly versionTo?: string;
-	}): Promise<FMigrationSources> {
+	}): Promise<FSqlMigrationSources> {
 		switch (sourceUri.protocol as UrlSchemas) {
 			case UrlSchemas.FILE: {
 				const sourceDirectory: string = fileURLToPath(sourceUri);
-				return FMigrationSources.loadFromFilesystem(executionContext, sourceDirectory, opts);
+				return FSqlMigrationSources.loadFromFilesystem(executionContext, sourceDirectory, opts);
 			}
 			case UrlSchemas.HTTP_TAR_GZ:
 				throw new FExceptionInvalidOperation("Not implemented yet");
@@ -49,12 +49,12 @@ export class FMigrationSources {
 			readonly versionFrom?: string;
 			readonly versionTo?: string;
 		}
-	): Promise<FMigrationSources> {
+	): Promise<FSqlMigrationSources> {
 		if (!await existsAsync(sourceDirectory)) {
-			throw new FMigrationSources.WrongMigrationDataException(`Migration directory '${sourceDirectory}' is not exist`);
+			throw new FSqlMigrationSources.WrongMigrationDataException(`Migration directory '${sourceDirectory}' is not exist`);
 		}
 
-		const migrationBundles: Array<FMigrationSources.VersionBundle> = [];
+		const migrationBundles: Array<FSqlMigrationSources.VersionBundle> = [];
 
 		const listVersions: Array<string> = (await readdirAsync(sourceDirectory, { withFileTypes: true }))
 			.filter(w => w.isDirectory())
@@ -81,11 +81,11 @@ export class FMigrationSources {
 				cancellationToken.throwIfCancellationRequested();
 				const versionDirectory = path.join(sourceDirectory, version);
 
-				const installDirectory = path.join(versionDirectory, FMigrationSources.Direction.INSTALL);
-				const rollbackDirectory = path.join(versionDirectory, FMigrationSources.Direction.ROLLBACK);
+				const installDirectory = path.join(versionDirectory, FSqlMigrationSources.Direction.INSTALL);
+				const rollbackDirectory = path.join(versionDirectory, FSqlMigrationSources.Direction.ROLLBACK);
 
-				const installBundleItems: Array<FMigrationSources.Script> = [];
-				const rollbackBundleItems: Array<FMigrationSources.Script> = [];
+				const installBundleItems: Array<FSqlMigrationSources.Script> = [];
+				const rollbackBundleItems: Array<FSqlMigrationSources.Script> = [];
 
 				if (await existsAsync(installDirectory)) {
 					const migrationFiles = await readdirAsync(installDirectory);
@@ -94,9 +94,9 @@ export class FMigrationSources {
 							cancellationToken.throwIfCancellationRequested();
 							const scriptFile = path.join(installDirectory, migrationFile);
 							const scriptContent: string = await readFileAsync(scriptFile, "utf-8");
-							const scriptKind: FMigrationSources.Script.Kind = resolveScriptKindByExtension(scriptFile);
+							const scriptKind: FSqlMigrationSources.Script.Kind = resolveScriptKindByExtension(scriptFile);
 							installBundleItems.push(
-								new FMigrationSources.Script(migrationFile, scriptKind, scriptFile, scriptContent)
+								new FSqlMigrationSources.Script(migrationFile, scriptKind, scriptFile, scriptContent)
 							);
 						}
 					}
@@ -108,24 +108,24 @@ export class FMigrationSources {
 							cancellationToken.throwIfCancellationRequested();
 							const scriptFile = path.join(rollbackDirectory, migrationFile);
 							const scriptContent: string = await readFileAsync(scriptFile, "utf-8");
-							const scriptKind: FMigrationSources.Script.Kind = resolveScriptKindByExtension(scriptFile);
+							const scriptKind: FSqlMigrationSources.Script.Kind = resolveScriptKindByExtension(scriptFile);
 							rollbackBundleItems.push(
-								new FMigrationSources.Script(migrationFile, scriptKind, scriptFile, scriptContent)
+								new FSqlMigrationSources.Script(migrationFile, scriptKind, scriptFile, scriptContent)
 							);
 						}
 					}
 				}
 
 				migrationBundles.push(
-					new FMigrationSources.VersionBundle(version, installBundleItems, rollbackBundleItems)
+					new FSqlMigrationSources.VersionBundle(version, installBundleItems, rollbackBundleItems)
 				);
 			}
 		}
 
-		return new FMigrationSources(migrationBundles);
+		return new FSqlMigrationSources(migrationBundles);
 	}
 
-	public getVersionBundle(versionName: string): FMigrationSources.VersionBundle {
+	public getVersionBundle(versionName: string): FSqlMigrationSources.VersionBundle {
 		const item = this._versions.get(versionName);
 		if (item === undefined) {
 			throw new FExceptionArgument(`No version bundle with name: ${versionName}`, "versionName");
@@ -134,15 +134,15 @@ export class FMigrationSources {
 	}
 
 	public map(
-		callbackfn: (content: FMigrationSources.Script["content"], info: {
+		callbackfn: (content: FSqlMigrationSources.Script["content"], info: {
 			readonly versionName: string;
-			readonly direction: FMigrationSources.Direction;
+			readonly direction: FSqlMigrationSources.Direction;
 			readonly itemName: string;
-		}) => FMigrationSources.Script["content"]
-	): FMigrationSources {
-		const mappedBundles: Array<FMigrationSources.VersionBundle> = [];
+		}) => FSqlMigrationSources.Script["content"]
+	): FSqlMigrationSources {
+		const mappedBundles: Array<FSqlMigrationSources.VersionBundle> = [];
 		for (const versionName of this.versionNames) {
-			const bundle: FMigrationSources.VersionBundle = this.getVersionBundle(versionName);
+			const bundle: FSqlMigrationSources.VersionBundle = this.getVersionBundle(versionName);
 			const newBundle = bundle.map((item, opts) => {
 				return callbackfn(item.content, Object.freeze({
 					itemName: item.name,
@@ -152,7 +152,7 @@ export class FMigrationSources {
 			});
 			mappedBundles.push(newBundle);
 		}
-		return new FMigrationSources(mappedBundles);
+		return new FSqlMigrationSources(mappedBundles);
 	}
 
 	public async saveToFilesystem(
@@ -171,8 +171,8 @@ export class FMigrationSources {
 			cancellationToken.throwIfCancellationRequested();
 
 			const versionDirectory: string = path.join(destinationDirectory, versionName);
-			const installDirectory: string = path.join(versionDirectory, FMigrationSources.Direction.INSTALL);
-			const rollbackDirectory: string = path.join(versionDirectory, FMigrationSources.Direction.ROLLBACK);
+			const installDirectory: string = path.join(versionDirectory, FSqlMigrationSources.Direction.INSTALL);
+			const rollbackDirectory: string = path.join(versionDirectory, FSqlMigrationSources.Direction.ROLLBACK);
 
 			await mkdirAsync(versionDirectory);
 			cancellationToken.throwIfCancellationRequested();
@@ -180,31 +180,31 @@ export class FMigrationSources {
 			cancellationToken.throwIfCancellationRequested();
 			await mkdirAsync(rollbackDirectory);
 
-			const versionBundle: FMigrationSources.VersionBundle = this.getVersionBundle(versionName);
+			const versionBundle: FSqlMigrationSources.VersionBundle = this.getVersionBundle(versionName);
 
 			for (const installItemName of versionBundle.installScriptNames) {
 				cancellationToken.throwIfCancellationRequested();
 				const bundleFile = path.join(installDirectory, installItemName);
-				const bundleItem: FMigrationSources.Script = versionBundle.getInstallScript(installItemName);
+				const bundleItem: FSqlMigrationSources.Script = versionBundle.getInstallScript(installItemName);
 				await writeFileAsync(bundleFile, bundleItem.content, "utf-8");
 			}
 
 			for (const rollbackItemName of versionBundle.rollbackScriptNames) {
 				cancellationToken.throwIfCancellationRequested();
 				const bundleFile: string = path.join(rollbackDirectory, rollbackItemName);
-				const bundleItem: FMigrationSources.Script = versionBundle.getRollbackScript(rollbackItemName);
+				const bundleItem: FSqlMigrationSources.Script = versionBundle.getRollbackScript(rollbackItemName);
 				await writeFileAsync(bundleFile, bundleItem.content, "utf-8");
 			}
 		}
 	}
 
-	private constructor(bundles: Array<FMigrationSources.VersionBundle>) {
+	private constructor(bundles: Array<FSqlMigrationSources.VersionBundle>) {
 		this._versions = new Map(bundles.map(bundle => ([bundle.versionName, bundle])));
 		this.versionNames = Object.freeze([...this._versions.keys()].sort());
 	}
 }
 
-export namespace FMigrationSources {
+export namespace FSqlMigrationSources {
 	export class WrongMigrationDataException extends FExceptionInvalidOperation { }
 
 	export class VersionBundle {
@@ -244,16 +244,16 @@ export namespace FMigrationSources {
 
 		public map(
 			callbackFn: (item: Script, opts: {
-				readonly direction: FMigrationSources.Direction;
+				readonly direction: FSqlMigrationSources.Direction;
 			}) => Script["content"]
 		): VersionBundle {
 			const installScripts: ReadonlyArray<Script> =
 				VersionBundle._map(this.installScriptNames, this._installScripts, (item) => {
-					return callbackFn(item, { direction: FMigrationSources.Direction.INSTALL });
+					return callbackFn(item, { direction: FSqlMigrationSources.Direction.INSTALL });
 				});
 			const rollbackScripts: ReadonlyArray<Script> =
 				VersionBundle._map(this.rollbackScriptNames, this._rollbackScripts, (item) => {
-					return callbackFn(item, { direction: FMigrationSources.Direction.ROLLBACK });
+					return callbackFn(item, { direction: FSqlMigrationSources.Direction.ROLLBACK });
 				});
 
 			return new VersionBundle(this.versionName, installScripts, rollbackScripts);
@@ -337,14 +337,14 @@ class NotSupportedUrlSchemaException extends FExceptionInvalidOperation {
 
 const sqlFilesExtensions = Object.freeze([".sql"]);
 const jsFilesExtensions = Object.freeze([".js"]);
-function resolveScriptKindByExtension(fileName: string): FMigrationSources.Script.Kind {
+function resolveScriptKindByExtension(fileName: string): FSqlMigrationSources.Script.Kind {
 	const ext = path.extname(fileName);
 	if (sqlFilesExtensions.includes(ext)) {
-		return FMigrationSources.Script.Kind.SQL;
+		return FSqlMigrationSources.Script.Kind.SQL;
 	}
 	if (jsFilesExtensions.includes(ext)) {
-		return FMigrationSources.Script.Kind.JAVASCRIPT;
+		return FSqlMigrationSources.Script.Kind.JAVASCRIPT;
 
 	}
-	return FMigrationSources.Script.Kind.UNKNOWN;
+	return FSqlMigrationSources.Script.Kind.UNKNOWN;
 }
