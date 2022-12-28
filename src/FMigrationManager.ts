@@ -5,8 +5,8 @@ import * as vm from "vm";
 import {
 	FExecutionContext,
 	FLogger,
-	FSqlProvider,
-	FSqlProviderFactory,
+	FSqlConnection,
+	FSqlConnectionFactory,
 	FException,
 	FLoggerLabels,
 } from "@freemework/common";
@@ -14,14 +14,14 @@ import {
 import { FMigrationSources } from "./FMigrationSources";
 
 export abstract class FMigrationManager {
-	private readonly _sqlProviderFactory: FSqlProviderFactory;
+	private readonly _sqlConnectionFactory: FSqlConnectionFactory;
 	private readonly _migrationSources: FMigrationSources;
 	private readonly _versionTableName: string;
 
 
 	public constructor(opts: FMigrationManager.Opts) {
 		this._migrationSources = opts.migrationSources;
-		this._sqlProviderFactory = opts.sqlProviderFactory;
+		this._sqlConnectionFactory = opts.sqlConnectionFactory;
 		this._versionTableName = opts.versionTableName !== undefined ? opts.versionTableName : "__migration";
 	}
 
@@ -49,14 +49,14 @@ export abstract class FMigrationManager {
 			}, []);
 		}
 
-		await this.sqlProviderFactory.usingProvider(executionContext, async (sqlProvider: FSqlProvider) => {
-			if (!(await this._isVersionTableExist(executionContext, sqlProvider))) {
-				await this._createVersionTable(executionContext, sqlProvider);
+		await this.sqlConnectionFactory.usingProvider(executionContext, async (sqlConnection: FSqlConnection) => {
+			if (!(await this._isVersionTableExist(executionContext, sqlConnection))) {
+				await this._createVersionTable(executionContext, sqlConnection);
 			}
 		});
 
 		for (const versionName of scheduleVersions) {
-			await this.sqlProviderFactory.usingProviderWithTransaction(executionContext, async (sqlProvider: FSqlProvider) => {
+			await this.sqlConnectionFactory.usingProviderWithTransaction(executionContext, async (sqlConnection: FSqlConnection) => {
 				const migrationLogger = new FMigrationManager.MigrationLogger(FLogger.create(`${logger.name}.${versionName}`));
 
 				const versionBundle: FMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
@@ -67,14 +67,14 @@ export abstract class FMigrationManager {
 						case FMigrationSources.Script.Kind.SQL: {
 							migrationLogger.info(executionContext, `Execute SQL script: ${script.name}`);
 							migrationLogger.trace(executionContext, EOL + script.content);
-							await this._executeMigrationSql(executionContext, sqlProvider, migrationLogger, script.content);
+							await this._executeMigrationSql(executionContext, sqlConnection, migrationLogger, script.content);
 							break;
 						}
 						case FMigrationSources.Script.Kind.JAVASCRIPT: {
 							migrationLogger.info(executionContext, `Execute JS script: ${script.name}`);
 							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationJavaScript(
-								executionContext, sqlProvider, migrationLogger,
+								executionContext, sqlConnection, migrationLogger,
 								{
 									content: script.content,
 									file: script.file
@@ -88,7 +88,7 @@ export abstract class FMigrationManager {
 				}
 
 				const logText: string = migrationLogger.flush();
-				await this._insertVersionLog(executionContext, sqlProvider, versionName, logText);
+				await this._insertVersionLog(executionContext, sqlConnection, versionName, logText);
 			});
 		}
 	}
@@ -119,8 +119,8 @@ export abstract class FMigrationManager {
 		}
 
 		for (const versionName of scheduleVersionNames) {
-			await this.sqlProviderFactory.usingProviderWithTransaction(executionContext, async (sqlProvider: FSqlProvider) => {
-				if (! await this._isVersionLogExist(executionContext, sqlProvider, versionName)) {
+			await this.sqlConnectionFactory.usingProviderWithTransaction(executionContext, async (sqlConnection: FSqlConnection) => {
+				if (! await this._isVersionLogExist(executionContext, sqlConnection, versionName)) {
 					logger.warn(executionContext, `Skip rollback for version '${versionName}' due this does not present inside database.`);
 					return;
 				}
@@ -135,14 +135,14 @@ export abstract class FMigrationManager {
 						case FMigrationSources.Script.Kind.SQL: {
 							migrationLogger.info(executionContext, `Execute SQL script: ${script.name}`);
 							migrationLogger.trace(executionContext, EOL + script.content);
-							await this._executeMigrationSql(executionContext, sqlProvider, migrationLogger, script.content);
+							await this._executeMigrationSql(executionContext, sqlConnection, migrationLogger, script.content);
 							break;
 						}
 						case FMigrationSources.Script.Kind.JAVASCRIPT: {
 							migrationLogger.info(executionContext, `Execute JS script: ${script.name}`);
 							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationJavaScript(
-								executionContext, sqlProvider, migrationLogger,
+								executionContext, sqlConnection, migrationLogger,
 								{
 									content: script.content,
 									file: script.file
@@ -155,7 +155,7 @@ export abstract class FMigrationManager {
 					}
 				}
 
-				await this._removeVersionLog(executionContext, sqlProvider, versionName);
+				await this._removeVersionLog(executionContext, sqlConnection, versionName);
 			});
 		}
 	}
@@ -166,17 +166,17 @@ export abstract class FMigrationManager {
 	 */
 	public abstract getCurrentVersion(executionContext: FExecutionContext): Promise<string | null>;
 
-	protected get sqlProviderFactory(): FSqlProviderFactory { return this._sqlProviderFactory; }
+	protected get sqlConnectionFactory(): FSqlConnectionFactory { return this._sqlConnectionFactory; }
 
 	protected get versionTableName(): string { return this._versionTableName; }
 
 	protected abstract _createVersionTable(
-		executionContext: FExecutionContext, sqlProvider: FSqlProvider
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection
 	): Promise<void>;
 
 	protected async _executeMigrationJavaScript(
 		executionContext: FExecutionContext,
-		sqlProvider: FSqlProvider,
+		sqlConnection: FSqlConnection,
 		migrationLogger: FLogger,
 		migrationJavaScript: {
 			readonly content: string;
@@ -185,7 +185,7 @@ export abstract class FMigrationManager {
 	): Promise<void> {
 		await new Promise<void>((resolve, reject) => {
 			const sandbox = {
-				__private: { executionContext, log: migrationLogger, resolve, reject, sqlConnection: sqlProvider },
+				__private: { executionContext, log: migrationLogger, resolve, reject, sqlConnection: sqlConnection },
 				__dirname: path.dirname(migrationJavaScript.file),
 				__filename: migrationJavaScript.file
 			};
@@ -201,32 +201,32 @@ Promise.resolve().then(() => migration(__private.executionContext, __private.sql
 
 	protected async _executeMigrationSql(
 		executionContext: FExecutionContext,
-		sqlProvider: FSqlProvider,
+		sqlConnection: FSqlConnection,
 		migrationLogger: FLogger,
 		sqlText: string
 	): Promise<void> {
 		migrationLogger.trace(executionContext, EOL + sqlText);
-		await sqlProvider.statement(sqlText).execute(executionContext);
+		await sqlConnection.statement(sqlText).execute(executionContext);
 	}
 
 	protected abstract _insertVersionLog(
-		executionContext: FExecutionContext, sqlProvider: FSqlProvider, version: string, logText: string
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string, logText: string
 	): Promise<void>;
 
 	protected abstract _isVersionLogExist(
-		executionContext: FExecutionContext, sqlProvider: FSqlProvider, version: string
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string
 	): Promise<boolean>;
 
 	protected abstract _isVersionTableExist(
-		executionContext: FExecutionContext, sqlProvider: FSqlProvider
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection
 	): Promise<boolean>;
 
 	protected abstract _removeVersionLog(
-		executionContext: FExecutionContext, sqlProvider: FSqlProvider, version: string
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string
 	): Promise<void>;
 
 	protected abstract _verifyVersionTableStructure(
-		executionContext: FExecutionContext, sqlProvider: FSqlProvider
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection
 	): Promise<void>;
 }
 
@@ -234,7 +234,7 @@ export namespace FMigrationManager {
 	export interface Opts {
 		readonly migrationSources: FMigrationSources;
 
-		readonly sqlProviderFactory: FSqlProviderFactory;
+		readonly sqlConnectionFactory: FSqlConnectionFactory;
 
 		/**
 		 * Name of version table. Default `__migration`.

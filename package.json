@@ -1,6 +1,6 @@
 {
 	"name": "@freemework/sql.misc.migration",
-	"version": "0.8.11",
+	"version": "0.8.12",
 	"description": "Hosting library of the Freemework Project.",
 	"author": {
 		"name": "Freemework Project",
@@ -42,7 +42,7 @@
 		"test:only": "tsc && mocha --require source-map-support/register \"test/**/*.test.js\" --recursive --timeout 10000"
 	},
 	"dependencies": {
-		"@freemework/common": "^0.8.11",
+		"@freemework/common": "^0.8.12",
 		"@types/node": "^18.11.18"
 	},
 	"devDependencies": {
