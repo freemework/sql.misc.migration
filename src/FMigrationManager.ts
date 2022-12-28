@@ -185,12 +185,12 @@ export abstract class FMigrationManager {
 	): Promise<void> {
 		await new Promise<void>((resolve, reject) => {
 			const sandbox = {
-				__private: { executionContext, log: migrationLogger, resolve, reject, sqlProvider },
+				__private: { executionContext, log: migrationLogger, resolve, reject, sqlConnection: sqlProvider },
 				__dirname: path.dirname(migrationJavaScript.file),
 				__filename: migrationJavaScript.file
 			};
 			const script = new vm.Script(`${migrationJavaScript.content}
-migration(__private.cancellationToken, __private.sqlProvider, __private.log).then(__private.resolve).catch(__private.reject);`,
+Promise.resolve().then(() => migration(__private.executionContext, __private.sqlConnection, __private.log)).then(__private.resolve).catch(__private.reject);`,
 				{
 					filename: migrationJavaScript.file
 				}
