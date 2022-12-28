@@ -6,7 +6,22 @@ import * as path from "path";
 import { pathToFileURL } from "url";
 
 import { FMigrationSources } from "../src";
-import { FCancellationToken, FExecutionContext, FExecutionContextCancellation } from "@freemework/common";
+import { FCancellationExecutionContext, FExecutionContext } from "@freemework/common";
+
+interface A {
+}
+namespace A {
+	export const Dummy = null;
+	export function factory(): A {
+		return new B();
+	}
+}
+class B implements A {
+	public constructor() {}
+}
+
+const a: A = A.factory();
+
 
 describe("FMigrationSources tests", function () {
 
@@ -15,10 +30,7 @@ describe("FMigrationSources tests", function () {
 
 		const migrationSources: FMigrationSources = await FMigrationSources
 			.load(
-				new FExecutionContextCancellation(
-					FExecutionContext.Empty,
-					FCancellationToken.None
-				),
+				FExecutionContext.Default,
 				pathToFileURL(resourcesDir)
 			);
 

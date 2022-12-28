@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import {
 	FCancellationToken,
 	FExecutionContext,
-	FExecutionContextCancellation,
+	FCancellationExecutionContext,
 	FExceptionArgument,
 	FExceptionInvalidOperation
 } from "@freemework/common";
@@ -60,7 +60,7 @@ export class FMigrationSources {
 			.filter(w => w.isDirectory())
 			.map(directory => directory.name);
 
-		const cancellationToken: FCancellationToken = FExecutionContextCancellation.of(executionContext).cancellationToken;
+		const cancellationToken: FCancellationToken = FCancellationExecutionContext.of(executionContext).cancellationToken;
 
 		if (listVersions.length > 0) {
 			for (const version of listVersions) {
@@ -165,7 +165,7 @@ export class FMigrationSources {
 			);
 		}
 
-		const cancellationToken: FCancellationToken = FExecutionContextCancellation.of(executionContext).cancellationToken;
+		const cancellationToken: FCancellationToken = FCancellationExecutionContext.of(executionContext).cancellationToken;
 
 		for (const versionName of this.versionNames) {
 			cancellationToken.throwIfCancellationRequested();

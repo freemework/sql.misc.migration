@@ -4,11 +4,11 @@ import * as vm from "vm";
 
 import {
 	FExecutionContext,
-	FLoggerLegacy,
+	FLogger,
 	FSqlProvider,
 	FSqlProviderFactory,
 	FException,
-	FExecutionContextLoggerLegacy
+	FLoggerLabels,
 } from "@freemework/common";
 
 import { FMigrationSources } from "./FMigrationSources";
@@ -31,7 +31,7 @@ export abstract class FMigrationManager {
 	 * @param targetVersion Optional target version. Will use latest version if omitted.
 	 */
 	public async install(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
-		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(executionContext).logger;
+		const logger: FLogger = FLogger.create("install");
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
 		const availableVersions: Array<string> = [...this._migrationSources.versionNames].sort(); // from old version to new version
 		let scheduleVersions: Array<string> = availableVersions;
@@ -57,7 +57,7 @@ export abstract class FMigrationManager {
 
 		for (const versionName of scheduleVersions) {
 			await this.sqlProviderFactory.usingProviderWithTransaction(executionContext, async (sqlProvider: FSqlProvider) => {
-				const migrationLogger = new FMigrationManager.MigrationLogger(logger.getLogger(versionName));
+				const migrationLogger = new FMigrationManager.MigrationLogger(FLogger.create(`${logger.name}.${versionName}`));
 
 				const versionBundle: FMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
 				const installScriptNames: Array<string> = [...versionBundle.installScriptNames].sort();
@@ -65,14 +65,14 @@ export abstract class FMigrationManager {
 					const script: FMigrationSources.Script = versionBundle.getInstallScript(scriptName);
 					switch (script.kind) {
 						case FMigrationSources.Script.Kind.SQL: {
-							migrationLogger.info(`Execute SQL script: ${script.name}`);
-							migrationLogger.trace(EOL + script.content);
+							migrationLogger.info(executionContext, `Execute SQL script: ${script.name}`);
+							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationSql(executionContext, sqlProvider, migrationLogger, script.content);
 							break;
 						}
 						case FMigrationSources.Script.Kind.JAVASCRIPT: {
-							migrationLogger.info(`Execute JS script: ${script.name}`);
-							migrationLogger.trace(EOL + script.content);
+							migrationLogger.info(executionContext, `Execute JS script: ${script.name}`);
+							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationJavaScript(
 								executionContext, sqlProvider, migrationLogger,
 								{
@@ -83,7 +83,7 @@ export abstract class FMigrationManager {
 							break;
 						}
 						default:
-							migrationLogger.warn(`Skip script '${versionName}:${script.name}' due unknown kind of script`);
+							migrationLogger.warn(executionContext, `Skip script '${versionName}:${script.name}' due unknown kind of script`);
 					}
 				}
 
@@ -99,7 +99,7 @@ export abstract class FMigrationManager {
 	 * @param targetVersion Optional target version. Will use first version if omitted.
 	 */
 	public async rollback(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
-		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(executionContext).logger;
+		const logger: FLogger = FLogger.create("rollback");
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
 		const availableVersions: Array<string> = [...this._migrationSources.versionNames].sort().reverse(); // from new version to old version
 		let scheduleVersionNames: Array<string> = availableVersions;
@@ -121,26 +121,26 @@ export abstract class FMigrationManager {
 		for (const versionName of scheduleVersionNames) {
 			await this.sqlProviderFactory.usingProviderWithTransaction(executionContext, async (sqlProvider: FSqlProvider) => {
 				if (! await this._isVersionLogExist(executionContext, sqlProvider, versionName)) {
-					logger.warn(`Skip rollback for version '${versionName}' due this does not present inside database.`);
+					logger.warn(executionContext, `Skip rollback for version '${versionName}' due this does not present inside database.`);
 					return;
 				}
 
 				const versionBundle: FMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
 				const rollbackScriptNames: Array<string> = [...versionBundle.rollbackScriptNames].sort();
 				for (const scriptName of rollbackScriptNames) {
-					const migrationLogger = logger.getLogger(versionName);
+					const migrationLogger: FLogger = FLogger.create(`${logger.name}.${versionName}`);
 
 					const script: FMigrationSources.Script = versionBundle.getRollbackScript(scriptName);
 					switch (script.kind) {
 						case FMigrationSources.Script.Kind.SQL: {
-							migrationLogger.info(`Execute SQL script: ${script.name}`);
-							migrationLogger.trace(EOL + script.content);
+							migrationLogger.info(executionContext, `Execute SQL script: ${script.name}`);
+							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationSql(executionContext, sqlProvider, migrationLogger, script.content);
 							break;
 						}
 						case FMigrationSources.Script.Kind.JAVASCRIPT: {
-							migrationLogger.info(`Execute JS script: ${script.name}`);
-							migrationLogger.trace(EOL + script.content);
+							migrationLogger.info(executionContext, `Execute JS script: ${script.name}`);
+							migrationLogger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationJavaScript(
 								executionContext, sqlProvider, migrationLogger,
 								{
@@ -151,7 +151,7 @@ export abstract class FMigrationManager {
 							break;
 						}
 						default:
-							migrationLogger.warn(`Skip script '${versionName}:${script.name}' due unknown kind of script`);
+							migrationLogger.warn(executionContext, `Skip script '${versionName}:${script.name}' due unknown kind of script`);
 					}
 				}
 
@@ -177,7 +177,7 @@ export abstract class FMigrationManager {
 	protected async _executeMigrationJavaScript(
 		executionContext: FExecutionContext,
 		sqlProvider: FSqlProvider,
-		migrationLogger: FLoggerLegacy,
+		migrationLogger: FLogger,
 		migrationJavaScript: {
 			readonly content: string;
 			readonly file: string;
@@ -202,10 +202,10 @@ migration(__private.cancellationToken, __private.sqlProvider, __private.log).the
 	protected async _executeMigrationSql(
 		executionContext: FExecutionContext,
 		sqlProvider: FSqlProvider,
-		migrationLogger: FLoggerLegacy,
+		migrationLogger: FLogger,
 		sqlText: string
 	): Promise<void> {
-		migrationLogger.trace(EOL + sqlText);
+		migrationLogger.trace(executionContext, EOL + sqlText);
 		await sqlProvider.statement(sqlText).execute(executionContext);
 	}
 
@@ -245,7 +245,7 @@ export namespace FMigrationManager {
 	export class MigrationException extends FException { }
 	export class WrongMigrationDataException extends MigrationException { }
 
-	export class MigrationLogger implements FLoggerLegacy {
+	export class MigrationLogger implements FLogger {
 		public readonly isTraceEnabled: boolean;
 		public readonly isDebugEnabled: boolean;
 		public readonly isInfoEnabled: boolean;
@@ -253,10 +253,10 @@ export namespace FMigrationManager {
 		public readonly isErrorEnabled: boolean;
 		public readonly isFatalEnabled: boolean;
 
-		private readonly _wrap: FLoggerLegacy;
+		private readonly _wrap: FLogger;
 		private readonly _lines: Array<string>;
 
-		public constructor(wrap: FLoggerLegacy) {
+		public constructor(wrap: FLogger) {
 			this.isTraceEnabled = true;
 			this.isDebugEnabled = true;
 			this.isInfoEnabled = true;
@@ -268,8 +268,8 @@ export namespace FMigrationManager {
 			this._wrap = wrap;
 		}
 
-		public get context(): FLoggerLegacy.Context {
-			return this._wrap.context;
+		public get name(): string | null {
+			return this._wrap.name;
 		}
 
 		public flush(): string {
@@ -277,36 +277,36 @@ export namespace FMigrationManager {
 			return this._lines.splice(0).join(EOL);
 		}
 
-		public trace(message: string, ex?: FException): void {
-			this._wrap.trace(message, ex);
+		public trace(variant: FExecutionContext | FLoggerLabels, message: string, ex?: FException): void {
+			this._wrap.trace(variant as any, message, ex);
 			this._lines.push("[TRACE] " + message);
 		}
-		public debug(message: string, ex?: FException): void {
-			this._wrap.debug(message, ex);
+		public debug(variant: FExecutionContext | FLoggerLabels, message: string, ex?: FException): void {
+			this._wrap.debug(variant as any, message, ex);
 			this._lines.push("[DEBUG] " + message);
 		}
-		public info(message: string): void {
-			this._wrap.info(message);
+		public info(variant: FExecutionContext | FLoggerLabels, message: string): void {
+			this._wrap.info(variant as any, message);
 			this._lines.push("[INFO] " + message);
 		}
-		public warn(message: string): void {
-			this._wrap.warn(message);
+		public warn(variant: FExecutionContext | FLoggerLabels, message: string): void {
+			this._wrap.warn(variant as any, message);
 			this._lines.push("[WARN] " + message);
 		}
-		public error(message: string): void {
-			this._wrap.error(message);
+		public error(variant: FExecutionContext | FLoggerLabels, message: string): void {
+			this._wrap.error(variant as any, message);
 			this._lines.push("[ERROR] " + message);
 		}
-		public fatal(message: string): void {
-			this._wrap.fatal(message);
+		public fatal(variant: FExecutionContext | FLoggerLabels, message: string): void {
+			this._wrap.fatal(variant as any, message);
 			this._lines.push("[FATAL]" + message);
 		}
 
-		public getLogger(name: string): FLoggerLegacy;
-		public getLogger(name: string, context: FLoggerLegacy.Context): FLoggerLegacy;
-		public getLogger(context: FLoggerLegacy.Context): FLoggerLegacy;
-		public getLogger(name: unknown, context?: unknown): FLoggerLegacy {
-			return this;
-		}
+		// public getLogger(name: string): FLoggerLegacy;
+		// public getLogger(name: string, context: FLoggerLegacy.Context): FLoggerLegacy;
+		// public getLogger(context: FLoggerLegacy.Context): FLoggerLegacy;
+		// public getLogger(name: unknown, context?: unknown): FLoggerLegacy {
+		// 	return this;
+		// }
 	}
 }
