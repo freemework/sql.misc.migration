@@ -9,6 +9,7 @@ import {
 	FSqlConnectionFactory,
 	FException,
 	FLoggerLabels,
+	FLoggerMessageFactory,
 } from "@freemework/common";
 
 import { FSqlMigrationSources } from "./FSqlMigrationSources";
@@ -277,28 +278,28 @@ export namespace FSqlMigrationManager {
 			return this._lines.splice(0).join(EOL);
 		}
 
-		public trace(variant: FExecutionContext | FLoggerLabels, message: string, ex?: FException): void {
-			this._wrap.trace(variant as any, message, ex);
+		public trace(executionContext: FExecutionContext, message: string | FLoggerMessageFactory, ex?: FException): void {
+			this._wrap.trace(executionContext, message as any, ex);
 			this._lines.push("[TRACE] " + message);
 		}
-		public debug(variant: FExecutionContext | FLoggerLabels, message: string, ex?: FException): void {
-			this._wrap.debug(variant as any, message, ex);
+		public debug(executionContext: FExecutionContext, message: string | FLoggerMessageFactory, ex?: FException): void {
+			this._wrap.debug(executionContext, message as any, ex);
 			this._lines.push("[DEBUG] " + message);
 		}
-		public info(variant: FExecutionContext | FLoggerLabels, message: string): void {
-			this._wrap.info(variant as any, message);
+		public info(executionContext: FExecutionContext, message: string | FLoggerMessageFactory): void {
+			this._wrap.info(executionContext, message as any);
 			this._lines.push("[INFO] " + message);
 		}
-		public warn(variant: FExecutionContext | FLoggerLabels, message: string): void {
-			this._wrap.warn(variant as any, message);
+		public warn(executionContext: FExecutionContext, message: string | FLoggerMessageFactory): void {
+			this._wrap.warn(executionContext, message as any);
 			this._lines.push("[WARN] " + message);
 		}
-		public error(variant: FExecutionContext | FLoggerLabels, message: string): void {
-			this._wrap.error(variant as any, message);
+		public error(executionContext: FExecutionContext, message: string | FLoggerMessageFactory): void {
+			this._wrap.error(executionContext, message as any);
 			this._lines.push("[ERROR] " + message);
 		}
-		public fatal(variant: FExecutionContext | FLoggerLabels, message: string): void {
-			this._wrap.fatal(variant as any, message);
+		public fatal(executionContext: FExecutionContext, message: string | FLoggerMessageFactory): void {
+			this._wrap.fatal(executionContext, message as any);
 			this._lines.push("[FATAL]" + message);
 		}
 
