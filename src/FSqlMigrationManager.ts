@@ -16,12 +16,10 @@ import { FSqlMigrationSources } from "./FSqlMigrationSources";
 
 export abstract class FSqlMigrationManager {
 	private readonly _sqlConnectionFactory: FSqlConnectionFactory;
-	private readonly _migrationSources: FSqlMigrationSources;
 	private readonly _versionTableName: string;
 
 
 	public constructor(opts: FSqlMigrationManager.Opts) {
-		this._migrationSources = opts.migrationSources;
 		this._sqlConnectionFactory = opts.sqlConnectionFactory;
 		this._versionTableName = opts.versionTableName !== undefined ? opts.versionTableName : "__migration";
 	}
@@ -31,10 +29,10 @@ export abstract class FSqlMigrationManager {
 	 * @param executionContext
 	 * @param targetVersion Optional target version. Will use latest version if omitted.
 	 */
-	public async install(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
+	public async install(executionContext: FExecutionContext, migrationSources: FSqlMigrationSources, targetVersion?: string): Promise<void> {
 		const logger: FLogger = FLogger.create("install");
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
-		const availableVersions: Array<string> = [...this._migrationSources.versionNames].sort(); // from old version to new version
+		const availableVersions: Array<string> = [...migrationSources.versionNames].sort(); // from old version to new version
 		let scheduleVersions: Array<string> = availableVersions;
 
 		if (currentVersion !== null) {
@@ -60,7 +58,7 @@ export abstract class FSqlMigrationManager {
 			await this.sqlConnectionFactory.usingProviderWithTransaction(executionContext, async (sqlConnection: FSqlConnection) => {
 				const migrationLogger = new FSqlMigrationManager.MigrationLogger(FLogger.create(`${logger.name}.${versionName}`));
 
-				const versionBundle: FSqlMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
+				const versionBundle: FSqlMigrationSources.VersionBundle = migrationSources.getVersionBundle(versionName);
 				const installScriptNames: Array<string> = [...versionBundle.installScriptNames].sort();
 				for (const scriptName of installScriptNames) {
 					const script: FSqlMigrationSources.Script = versionBundle.getInstallScript(scriptName);
@@ -90,6 +88,9 @@ export abstract class FSqlMigrationManager {
 
 				const logText: string = migrationLogger.flush();
 				await this._insertVersionLog(executionContext, sqlConnection, versionName, logText);
+
+				const rollbackScripts: Array<FSqlMigrationSources.Script> = versionBundle.rollbackScriptNames.map(scriptName => versionBundle.getRollbackScript(scriptName));
+				await this._insertRollbackScripts(executionContext, sqlConnection, versionName, rollbackScripts);
 			});
 		}
 	}
@@ -102,7 +103,12 @@ export abstract class FSqlMigrationManager {
 	public async rollback(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
 		const logger: FLogger = FLogger.create("rollback");
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
-		const availableVersions: Array<string> = [...this._migrationSources.versionNames].sort().reverse(); // from new version to old version
+
+		const versionNames: Array<string> = await this.sqlConnectionFactory.usingProvider(executionContext,
+			(sqlConnection: FSqlConnection) => this._listVersions(executionContext, sqlConnection)
+		);
+
+		const availableVersions: Array<string> = [...versionNames].sort().reverse(); // from new version to old version
 		let scheduleVersionNames: Array<string> = availableVersions;
 
 		if (currentVersion !== null) {
@@ -126,12 +132,14 @@ export abstract class FSqlMigrationManager {
 					return;
 				}
 
-				const versionBundle: FSqlMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
-				const rollbackScriptNames: Array<string> = [...versionBundle.rollbackScriptNames].sort();
+				const scripts: Array<FSqlMigrationSources.Script> = await this._getRollbackScripts(executionContext, sqlConnection, versionName);
+				//const versionBundle: FSqlMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
+				const rollbackScriptNames: Array<string> = [...scripts.map(s => s.name)].sort();
+				const scriptsMap: Map<string, FSqlMigrationSources.Script> = scripts.reduce((acc, curr) => { acc.set(curr.name, curr); return acc }, new Map<string, FSqlMigrationSources.Script>());
 				for (const scriptName of rollbackScriptNames) {
 					const migrationLogger: FLogger = FLogger.create(`${logger.name}.${versionName}`);
 
-					const script: FSqlMigrationSources.Script = versionBundle.getRollbackScript(scriptName);
+					const script: FSqlMigrationSources.Script = scriptsMap.get(scriptName)!;
 					switch (script.kind) {
 						case FSqlMigrationSources.Script.Kind.SQL: {
 							migrationLogger.info(executionContext, `Execute SQL script: ${script.name}`);
@@ -210,6 +218,15 @@ Promise.resolve().then(() => migration(__private.executionContext, __private.sql
 		await sqlConnection.statement(sqlText).execute(executionContext);
 	}
 
+	protected abstract _getRollbackScripts(
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string
+	): Promise<Array<FSqlMigrationSources.Script>>;
+
+
+	protected abstract _insertRollbackScripts(
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string, scripts: ReadonlyArray<FSqlMigrationSources.Script>
+	): Promise<void>;
+
 	protected abstract _insertVersionLog(
 		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string, logText: string
 	): Promise<void>;
@@ -221,6 +238,10 @@ Promise.resolve().then(() => migration(__private.executionContext, __private.sql
 	protected abstract _isVersionTableExist(
 		executionContext: FExecutionContext, sqlConnection: FSqlConnection
 	): Promise<boolean>;
+
+	protected abstract _listVersions(
+		executionContext: FExecutionContext, sqlConnection: FSqlConnection
+	): Promise<Array<string>>;
 
 	protected abstract _removeVersionLog(
 		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string
