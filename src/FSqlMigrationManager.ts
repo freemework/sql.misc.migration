@@ -10,6 +10,7 @@ import {
 	FException,
 	FLoggerLabels,
 	FLoggerMessageFactory,
+	FLoggerLabelsExecutionContext,
 } from "@freemework/common";
 
 import { FSqlMigrationSources } from "./FSqlMigrationSources";
@@ -17,11 +18,12 @@ import { FSqlMigrationSources } from "./FSqlMigrationSources";
 export abstract class FSqlMigrationManager {
 	private readonly _sqlConnectionFactory: FSqlConnectionFactory;
 	private readonly _versionTableName: string;
-
+	private readonly logger: FLogger;
 
 	public constructor(opts: FSqlMigrationManager.Opts) {
 		this._sqlConnectionFactory = opts.sqlConnectionFactory;
 		this._versionTableName = opts.versionTableName !== undefined ? opts.versionTableName : "__migration";
+		this.logger = FLogger.create(this.constructor.name);
 	}
 
 	/**
@@ -30,7 +32,10 @@ export abstract class FSqlMigrationManager {
 	 * @param targetVersion Optional target version. Will use latest version if omitted.
 	 */
 	public async install(executionContext: FExecutionContext, migrationSources: FSqlMigrationSources, targetVersion?: string): Promise<void> {
-		const logger: FLogger = FLogger.create("install");
+		executionContext = new FLoggerLabelsExecutionContext(executionContext, {
+			"direction": "install"
+		});
+
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
 		const availableVersions: Array<string> = [...migrationSources.versionNames].sort(); // from old version to new version
 		let scheduleVersions: Array<string> = availableVersions;
@@ -55,12 +60,20 @@ export abstract class FSqlMigrationManager {
 		});
 
 		for (const versionName of scheduleVersions) {
+			executionContext = new FLoggerLabelsExecutionContext(executionContext, {
+				"version": versionName
+			});
+
 			await this.sqlConnectionFactory.usingProviderWithTransaction(executionContext, async (sqlConnection: FSqlConnection) => {
-				const migrationLogger = new FSqlMigrationManager.MigrationLogger(FLogger.create(`${logger.name}.${versionName}`));
+				const migrationLogger = new FSqlMigrationManager.MigrationLogger(this.logger);
 
 				const versionBundle: FSqlMigrationSources.VersionBundle = migrationSources.getVersionBundle(versionName);
 				const installScriptNames: Array<string> = [...versionBundle.installScriptNames].sort();
 				for (const scriptName of installScriptNames) {
+					executionContext = new FLoggerLabelsExecutionContext(executionContext, {
+						"script": scriptName
+					});
+
 					const script: FSqlMigrationSources.Script = versionBundle.getInstallScript(scriptName);
 					switch (script.kind) {
 						case FSqlMigrationSources.Script.Kind.SQL: {
@@ -101,7 +114,10 @@ export abstract class FSqlMigrationManager {
 	 * @param targetVersion Optional target version. Will use first version if omitted.
 	 */
 	public async rollback(executionContext: FExecutionContext, targetVersion?: string): Promise<void> {
-		const logger: FLogger = FLogger.create("rollback");
+		executionContext = new FLoggerLabelsExecutionContext(executionContext, {
+			"direction": "rollback"
+		});
+
 		const currentVersion: string | null = await this.getCurrentVersion(executionContext);
 
 		const versionNames: Array<string> = await this.sqlConnectionFactory.usingProvider(executionContext,
@@ -126,32 +142,38 @@ export abstract class FSqlMigrationManager {
 		}
 
 		for (const versionName of scheduleVersionNames) {
+			executionContext = new FLoggerLabelsExecutionContext(executionContext, {
+				"version": versionName
+			});
+
 			await this.sqlConnectionFactory.usingProviderWithTransaction(executionContext, async (sqlConnection: FSqlConnection) => {
 				if (! await this._isVersionLogExist(executionContext, sqlConnection, versionName)) {
-					logger.warn(executionContext, `Skip rollback for version '${versionName}' due this does not present inside database.`);
+					this.logger.warn(executionContext, `Skip rollback for version '${versionName}' due this does not present inside database.`);
 					return;
 				}
 
 				const scripts: Array<FSqlMigrationSources.Script> = await this._getRollbackScripts(executionContext, sqlConnection, versionName);
 				//const versionBundle: FSqlMigrationSources.VersionBundle = this._migrationSources.getVersionBundle(versionName);
-				const rollbackScriptNames: Array<string> = [...scripts.map(s => s.name)].sort();
+				const rollbackScriptNames: Array<string> = [...scripts.map(s => s.name)].sort().reverse();
 				const scriptsMap: Map<string, FSqlMigrationSources.Script> = scripts.reduce((acc, curr) => { acc.set(curr.name, curr); return acc }, new Map<string, FSqlMigrationSources.Script>());
 				for (const scriptName of rollbackScriptNames) {
-					const migrationLogger: FLogger = FLogger.create(`${logger.name}.${versionName}`);
+					executionContext = new FLoggerLabelsExecutionContext(executionContext, {
+						"script": scriptName
+					});
 
 					const script: FSqlMigrationSources.Script = scriptsMap.get(scriptName)!;
 					switch (script.kind) {
 						case FSqlMigrationSources.Script.Kind.SQL: {
-							migrationLogger.info(executionContext, `Execute SQL script: ${script.name}`);
-							migrationLogger.trace(executionContext, EOL + script.content);
-							await this._executeMigrationSql(executionContext, sqlConnection, migrationLogger, script.content);
+							this.logger.info(executionContext, `Execute SQL script: ${script.name}`);
+							this.logger.trace(executionContext, EOL + script.content);
+							await this._executeMigrationSql(executionContext, sqlConnection, this.logger, script.content);
 							break;
 						}
 						case FSqlMigrationSources.Script.Kind.JAVASCRIPT: {
-							migrationLogger.info(executionContext, `Execute JS script: ${script.name}`);
-							migrationLogger.trace(executionContext, EOL + script.content);
+							this.logger.info(executionContext, `Execute JS script: ${script.name}`);
+							this.logger.trace(executionContext, EOL + script.content);
 							await this._executeMigrationJavaScript(
-								executionContext, sqlConnection, migrationLogger,
+								executionContext, sqlConnection, this.logger,
 								{
 									content: script.content,
 									file: script.file
@@ -160,7 +182,7 @@ export abstract class FSqlMigrationManager {
 							break;
 						}
 						default:
-							migrationLogger.warn(executionContext, `Skip script '${versionName}:${script.name}' due unknown kind of script`);
+							this.logger.warn(executionContext, `Skip script '${versionName}:${script.name}' due unknown kind of script`);
 					}
 				}
 
@@ -218,14 +240,26 @@ Promise.resolve().then(() => migration(__private.executionContext, __private.sql
 		await sqlConnection.statement(sqlText).execute(executionContext);
 	}
 
-	protected abstract _getRollbackScripts(
-		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string
-	): Promise<Array<FSqlMigrationSources.Script>>;
+	protected async _getRollbackScripts(
+		executionContext: FExecutionContext,
+		sqlConnection: FSqlConnection,
+		version: string
+	): Promise<Array<FSqlMigrationSources.Script>> {
+		// TODO Make abstract method
+		this.logger.fatal(executionContext, "_getRollbackScripts: Not implemented yet");
+		return [];
+	}
 
 
-	protected abstract _insertRollbackScripts(
-		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string, scripts: ReadonlyArray<FSqlMigrationSources.Script>
-	): Promise<void>;
+	protected async _insertRollbackScripts(
+		executionContext: FExecutionContext,
+		sqlConnection: FSqlConnection,
+		version: string,
+		scripts: ReadonlyArray<FSqlMigrationSources.Script>
+	): Promise<void> {
+		// TODO Make abstract method
+		this.logger.fatal(executionContext, "_insertRollbackScripts: Not implemented yet");
+	}
 
 	protected abstract _insertVersionLog(
 		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string, logText: string
@@ -239,9 +273,14 @@ Promise.resolve().then(() => migration(__private.executionContext, __private.sql
 		executionContext: FExecutionContext, sqlConnection: FSqlConnection
 	): Promise<boolean>;
 
-	protected abstract _listVersions(
-		executionContext: FExecutionContext, sqlConnection: FSqlConnection
-	): Promise<Array<string>>;
+	protected async _listVersions(
+		executionContext: FExecutionContext,
+		sqlConnection: FSqlConnection
+	): Promise<Array<string>> {
+		// TODO Make abstract method
+		this.logger.fatal(executionContext, "_listVersions: Not implemented yet");
+		return [];
+	}
 
 	protected abstract _removeVersionLog(
 		executionContext: FExecutionContext, sqlConnection: FSqlConnection, version: string
